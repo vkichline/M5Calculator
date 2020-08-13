@@ -1,18 +1,33 @@
 #include <cfloat>
 #include <M5Stack.h>
 
-#define KEYBOARD_I2C_ADDR     0X08
-#define KEYBOARD_INT          5
-#define BG_COLOR              BLUE
-#define FG_COLOR              LIGHTGREY
-#define ANN_TOP               4
-#define ANN_HEIGHT            16
-#define ANN_MARGIN            16
-#define ACC_TOP               28
-#define ACC_HEIGHT            40
-#define ACC_MARGIN            16
+#define KEYBOARD_I2C_ADDR     0X08        // I2C address of the Calculator FACE
+#define KEYBOARD_INT          5           // Data ready pin for Calculator FACE (active low)
+#define BG_COLOR              BLUE        // Arbitrary background color
+#define FG_COLOR              LIGHTGREY   // Arbitrary foreground color
+#define ANN_TOP               4           // Top of the Annunciator, which shows calculator status
+#define ANN_HEIGHT            16          // Height of the Annunciator
+#define ANN_MARGIN            16          // Left/right margin for the Annunciator
+#define ANN_FONT              2           // Annunciator font
+#define ACC_TOP               28          // Top of the Accumulator display, where the sum is shown
+#define ACC_HEIGHT            40          // Height of the Accumulator
+#define ACC_MARGIN            16          // Left/right marging of the Accumulator
+#define ACC_FONT              6           // Accumulator font
 
-enum Calc_Command { NO_COMMAND, CLEAR, TOTAL, MEMORY, DECIMAL, ADD, SUBTRACT, MULTIPLY, DIVIDE, PERCENT, SIGN };
+// Commands to be executed by the calculator
+enum Calc_Command {
+  NO_COMMAND,   // Nothing pending
+  CLEAR,        // Immidiate command: if command == MEMORY clear memory, else clear accumulator
+  TOTAL,        // If command == MEMORY, copy memory to accumulator. Else perform command, clear opperand and set accumulator to result
+  MEMORY,       // Set command mode to MEMORY. Affects the next command issued.
+  DECIMAL,      // If accumulator does not contain a decimal point, add a decimal point
+  ADD,          // If command == MEMORY, add accumulator to memory, else add accumulator to opperand, clear opperand
+  SUBTRACT,     // If command == MEMORY, subtract accumulator from memory, else subtract accumulator from opperand, clear opperand
+  MULTIPLY,     // If command == MEMORY, multiply memory by accumulator, else multiply accumulator by opperand, clear opperand
+  DIVIDE,       // If command == MEMORY, divide memory by accumulator, else divide opperand by accumulator, clear opperand
+  PERCENT,      // Depends on status of command; see function comments
+  SIGN          // Reverse the sign of the accumulator
+};
 
 
 const char    dp            = '.';        // Changes in differnet cultures
@@ -22,15 +37,16 @@ String        memory        = "0";        // The invisible memory
 Calc_Command  command       = NO_COMMAND; // Nothing to do currently
 bool          clear_accum   = false;      // This is true when the next number should clear the display (after a command)
 
+
 bool is_digit(char c)   { return c >= '0' && c <= '9'; }    // Return true if the character is a digit 0 - 9
 bool is_command(char c) { return 0 != c && !is_digit(c); }  // Return true if the character is one of the commands
 
 
-// Create a string that will be the calculator display for the number given.
-// If there is no fractional part, don't include a decimal
-// If there is, trim trailing zeros (and possibly decimal point as well)
+// Create a string that will be the calculator display and storage value for the number given.
+// If there is no fractional part, don't include a decimal.
+// If there is, trim trailing zeros (and possibly decimal point as well.)
 //
-String create_display_string(double value) {
+String double_to_string(double value) {
   char  buffer[64];
   if(0.0 == value - (long)value) {
     snprintf(buffer, 64, "%d", (long)value);
@@ -45,13 +61,13 @@ String create_display_string(double value) {
 }
 
 
-// Show the main number of interest at the top of the screen
+// Show the main number of interest near the top of the screen.
 //
 void display_accumulator() {
   M5.Lcd.fillRect(0, ACC_TOP, M5.Lcd.width(), ACC_HEIGHT, BG_COLOR);
   M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);
   M5.Lcd.setTextDatum(TR_DATUM);
-  M5.Lcd.drawString(accumulator, M5.Lcd.width() - ACC_MARGIN, ACC_TOP, 6);
+  M5.Lcd.drawString(accumulator, M5.Lcd.width() - ACC_MARGIN, ACC_TOP, ACC_FONT);
   M5.Lcd.setTextDatum(TL_DATUM);
 }
 
@@ -68,15 +84,16 @@ void display_annunciator() {
     case SUBTRACT: display += "-"; break;
     case MULTIPLY: display += "*"; break;
     case DIVIDE:   display += "/"; break;
+    default:                       break;
   }
   M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);
   M5.Lcd.setTextDatum(TR_DATUM);
-  M5.Lcd.drawString(display, M5.Lcd.width() - ANN_MARGIN, ANN_TOP, 2);
+  M5.Lcd.drawString(display, M5.Lcd.width() - ANN_MARGIN, ANN_TOP, ANN_FONT);
   M5.Lcd.setTextDatum(TL_DATUM);
 }
 
 
-// Convert an input character to a command. Return ERROR if the character did not represent a command.
+// Convert an input character to a Calc_Command. Return NO_COMMAND if the character did not represent a known command.
 //
 Calc_Command input_to_command(char c) {
   switch(c) {
@@ -95,7 +112,7 @@ Calc_Command input_to_command(char c) {
 }
 
 
-// Do the actual work of calculation
+// Do the actual work of calculation.
 //
 void perform_operation() {
   double acc = atof(accumulator.c_str());
@@ -103,22 +120,22 @@ void perform_operation() {
 
   switch(command) {
     case ADD:
-      accumulator = create_display_string(opp + acc);
+      accumulator = double_to_string(opp + acc);
       clear_accum = true;
       opperand    = "";
       break;
     case SUBTRACT:
-      accumulator = create_display_string(opp - acc);
+      accumulator = double_to_string(opp - acc);
       clear_accum = true;
       opperand    = "";
       break;
     case MULTIPLY:
-      accumulator = create_display_string(opp * acc);
+      accumulator = double_to_string(opp * acc);
       clear_accum = true;
       opperand    = "";
       break;
     case DIVIDE:
-      accumulator = create_display_string(opp / acc);
+      accumulator = double_to_string(opp / acc);
       clear_accum = true;
       opperand    = "";
       break;
@@ -128,6 +145,8 @@ void perform_operation() {
         accumulator.remove(0, 1);
       else
         accumulator = String("-") + accumulator;
+      break;
+    default:
       break;
   }
   command = NO_COMMAND;
@@ -144,53 +163,58 @@ void perform_percentage() {
   double acc = atof(accumulator.c_str());
 
   if(NO_COMMAND == command) {
-    accumulator = create_display_string(acc / 100.0);
+    accumulator = double_to_string(acc / 100.0);
     display_accumulator();
   }
   else if(ADD == command || SUBTRACT == command) {
     double opp = atof(opperand.c_str());
-    accumulator = create_display_string(acc / 100.0 * opp);
+    accumulator = double_to_string(acc / 100.0 * opp);
     perform_operation();
   }
   else if(MULTIPLY == command || DIVIDE == command) {
-    accumulator = create_display_string(acc / 100.0);
+    accumulator = double_to_string(acc / 100.0);
     perform_operation();
   }
 }
 
 
-// Handle a command from the keyboard
+// Handle a command from the keyboard.
 //
 void process_command(Calc_Command cmd) {
   // If the current command is MEMROY, then this command should be handled specially.
   if(MEMORY == command) {
     double acc = atof(accumulator.c_str());
     double mem = atof(memory.c_str());
+
     switch(cmd) {
       case CLEAR:
         memory = "0";
         break;
       case ADD:
-        memory = create_display_string(mem + acc);
+        memory = double_to_string(mem + acc);
         break;
       case SUBTRACT:
-        memory = create_display_string(mem - acc);
+        memory = double_to_string(mem - acc);
         break;
       case MULTIPLY:
-         memory = create_display_string(mem * acc);
+         memory = double_to_string(mem * acc);
         break;
       case DIVIDE:
-        memory = create_display_string(mem / acc);
+        memory = double_to_string(mem / acc);
         break;
       case TOTAL:
         accumulator = memory;
         display_accumulator();
         clear_accum = true;
+        break;
+      default :
+        break;
     }
     command = NO_COMMAND;
     return;
   }
 
+  // Normal (non-memory) command handling
   switch(cmd) {
     case CLEAR:
       accumulator = "0";
@@ -234,6 +258,8 @@ void process_command(Calc_Command cmd) {
     case TOTAL:
       // command was set previously
       perform_operation();
+      break;
+    default:
       break;
   }
 }
