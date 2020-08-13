@@ -60,7 +60,8 @@ void display_accumulator() {
 //
 void display_annunciator() {
   String display = "                ";
-  if(!(memory == "0" || memory == "")) display += "M ";
+  bool memory_is_clear = memory == "0" || memory == "";
+  if(MEMORY == command || !memory_is_clear) display += "M ";
   M5.Lcd.fillRect(0, ANN_TOP, M5.Lcd.width(), ANN_HEIGHT, BG_COLOR);
   switch(command) {
     case ADD:      display += "+"; break;
@@ -141,13 +142,13 @@ void perform_operation() {
 //
 void perform_percentage() {
   double acc = atof(accumulator.c_str());
-  double opp = atof(opperand.c_str());
 
   if(NO_COMMAND == command) {
     accumulator = create_display_string(acc / 100.0);
     display_accumulator();
   }
   else if(ADD == command || SUBTRACT == command) {
+    double opp = atof(opperand.c_str());
     accumulator = create_display_string(acc / 100.0 * opp);
     perform_operation();
   }
@@ -161,11 +162,40 @@ void perform_percentage() {
 // Handle a command from the keyboard
 //
 void process_command(Calc_Command cmd) {
+  // If the current command is MEMROY, then this command should be handled specially.
+  if(MEMORY == command) {
+    double acc = atof(accumulator.c_str());
+    double mem = atof(memory.c_str());
+    switch(cmd) {
+      case CLEAR:
+        memory = "0";
+        break;
+      case ADD:
+        memory = create_display_string(mem + acc);
+        break;
+      case SUBTRACT:
+        memory = create_display_string(mem - acc);
+        break;
+      case MULTIPLY:
+         memory = create_display_string(mem * acc);
+        break;
+      case DIVIDE:
+        memory = create_display_string(mem / acc);
+        break;
+      case TOTAL:
+        accumulator = memory;
+        display_accumulator();
+        clear_accum = true;
+    }
+    command = NO_COMMAND;
+    return;
+  }
+
   switch(cmd) {
     case CLEAR:
       accumulator = "0";
       display_accumulator();
-      break;
+      return;
     case DECIMAL:
       // Make sure there's not already a decimal point in the accumulator
       if(-1 == accumulator.indexOf(dp)) accumulator += dp;
@@ -190,12 +220,16 @@ void process_command(Calc_Command cmd) {
       opperand    = accumulator;
       clear_accum = true;
       break;
-    case PERCENT:
-      perform_percentage();
+    case MEMORY:
+      // enter memory mode, which will effect future commands.
+      command     = MEMORY;
       break;
     case SIGN:
       command     = SIGN;
       perform_operation();
+      break;
+    case PERCENT:
+      perform_percentage();
       break;
     case TOTAL:
       // command was set previously
@@ -256,18 +290,22 @@ bool process_input() {
 }
 
 
+// Standard Arduino program initialization function.
+//
 void setup() {
   M5.begin();
   Wire.begin();
   M5.Lcd.setTextFont(4);
   pinMode(KEYBOARD_INT, INPUT_PULLUP);
   M5.Lcd.fillScreen(BG_COLOR);
-  M5.Lcd.setTextFont(4);
   display_accumulator();
 }
 
 
+// Standard Arduino program loop
+// Continually look for input and process it.
 void loop() {
-  if(process_input())
-    display_annunciator();
+  // If anything happend, make sure the annunciator is updated
+  if(process_input()) display_annunciator();
+  delay(10);
 }
