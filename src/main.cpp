@@ -5,15 +5,20 @@
 #define KEYBOARD_INT          5
 #define BG_COLOR              BLUE
 #define FG_COLOR              LIGHTGREY
-#define ACC_TOP               8
+#define ANN_TOP               4
+#define ANN_HEIGHT            16
+#define ANN_MARGIN            16
+#define ACC_TOP               28
 #define ACC_HEIGHT            40
-#define ACC_MARGIN            8
+#define ACC_MARGIN            16
 
 enum Calc_Command { NO_COMMAND, CLEAR, TOTAL, MEMORY, DECIMAL, ADD, SUBTRACT, MULTIPLY, DIVIDE, PERCENT, SIGN };
+
 
 const char    dp            = '.';        // Changes in differnet cultures
 String        accumulator   = "0";        // The number displayed as the main value of the calculator
 String        opperand      = "0";        // The number the current command will operate on
+String        memory        = "0";        // The invisible memory
 Calc_Command  command       = NO_COMMAND; // Nothing to do currently
 bool          clear_accum   = false;      // This is true when the next number should clear the display (after a command)
 
@@ -47,6 +52,25 @@ void display_accumulator() {
   M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);
   M5.Lcd.setTextDatum(TR_DATUM);
   M5.Lcd.drawString(accumulator, M5.Lcd.width() - ACC_MARGIN, ACC_TOP, 6);
+  M5.Lcd.setTextDatum(TL_DATUM);
+}
+
+
+// Show the calculator's status in the annunciator at the top-right of the screen.
+//
+void display_annunciator() {
+  String display = "                ";
+  if(!(memory == "0" || memory == "")) display += "M ";
+  M5.Lcd.fillRect(0, ANN_TOP, M5.Lcd.width(), ANN_HEIGHT, BG_COLOR);
+  switch(command) {
+    case ADD:      display += "+"; break;
+    case SUBTRACT: display += "-"; break;
+    case MULTIPLY: display += "*"; break;
+    case DIVIDE:   display += "/"; break;
+  }
+  M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);
+  M5.Lcd.setTextDatum(TR_DATUM);
+  M5.Lcd.drawString(display, M5.Lcd.width() - ANN_MARGIN, ANN_TOP, 2);
   M5.Lcd.setTextDatum(TL_DATUM);
 }
 
@@ -116,7 +140,21 @@ void perform_operation() {
 // If previous command was + or -, replace accumulator with current accumulator % of opperand and perform_operation.
 //
 void perform_percentage() {
+  double acc = atof(accumulator.c_str());
+  double opp = atof(opperand.c_str());
 
+  if(NO_COMMAND == command) {
+    accumulator = create_display_string(acc / 100.0);
+    display_accumulator();
+  }
+  else if(ADD == command || SUBTRACT == command) {
+    accumulator = create_display_string(acc / 100.0 * opp);
+    perform_operation();
+  }
+  else if(MULTIPLY == command || DIVIDE == command) {
+    accumulator = create_display_string(acc / 100.0);
+    perform_operation();
+  }
 }
 
 
@@ -201,15 +239,20 @@ bool read_key(char& input) {
 // If it's a digit, push it into the accumulator and display it.
 // If it's a command, execute it.
 //
-void process_input() {
+bool process_input() {
   char input;
   if(read_key(input)) {
     if(is_digit(input)) process_digit((uint8_t)input - '0');
     else {
       Calc_Command cmd = input_to_command(input);
-      if(NO_COMMAND != cmd) process_command(cmd);
+      if(NO_COMMAND != cmd)
+        process_command(cmd);
+      else
+        return false;
     }
+    return true;  // something was processed
   }
+  return false;
 }
 
 
@@ -225,5 +268,6 @@ void setup() {
 
 
 void loop() {
-  process_input();
+  if(process_input())
+    display_annunciator();
 }
