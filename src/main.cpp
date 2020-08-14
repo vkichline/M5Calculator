@@ -1,29 +1,38 @@
-#include <cfloat>
 #include <M5Stack.h>
 
 #define KEYBOARD_I2C_ADDR     0X08        // I2C address of the Calculator FACE
 #define KEYBOARD_INT          5           // Data ready pin for Calculator FACE (active low)
-#define BG_COLOR              BLUE        // Arbitrary background color
 #define FG_COLOR              LIGHTGREY   // Arbitrary foreground color
+#define BG_COLOR              BLUE        // Arbitrary background color
 #define SCREEN_WIDTH          320         // Horizontal screen size
 #define SCREEN_H_CENTER       160         // Horizontal center of screen
 
 #define ANN_TOP               4           // Top of the Annunciator, which shows calculator status
-#define ANN_HEIGHT            16          // Height of the Annunciator
+#define ANN_HEIGHT            20          // Height of the Annunciator
 #define ANN_MARGIN            16          // Left/right margin for the Annunciator
 #define ANN_FONT              2           // Annunciator font
+#define ANN_FG_COLOR          BLACK       // Annunciator foreground color
+#define ANN_BG_COLOR          DARKGREY    // Annunciator background color
 
 #define ACC_TOP               40          // Top of the Accumulator display, where the sum is shown
 #define ACC_HEIGHT            40          // Height of the Accumulator
 #define ACC_MARGIN            16          // Left/right marging of the Accumulator
 #define ACC_FONT              6           // Accumulator font
+#define ACC_FG_COLOR          FG_COLOR    // Accumulator foreground color
+#define ACC_BG_COLOR          BG_COLOR    // Accumulator background color
 
 #define INFO_TOP              110         // Top of the Info area
 #define INFO_HEIGHT           110         // Height of the Info area
 #define INFO_MARGIN           16          // Left/right margins of the Info area
 #define INFO_FONT             2           // Info font
+#define INFO_FG_COLOR         FG_COLOR    // Info foreground color
+#define INFO_BG_COLOR         BG_COLOR    // Info background color
 
-// Calculator Commands
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Calculator Commands
 //
 enum Calc_Command {
   NO_COMMAND,   // Nothing pending
@@ -40,7 +49,9 @@ enum Calc_Command {
 };
 
 
-// Global Variables
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Global Variables
 //
 const char    dp            = '.';        // Decimal Point: changes in differnet cultures
 const char    ts            = ',';        // Thousands separator: changes in differnet cultures
@@ -51,6 +62,7 @@ Calc_Command  command       = NO_COMMAND; // Nothing to do currently
 Calc_Command  previous      = NO_COMMAND; // The previously executed command
 bool          restart       = true;       // This is true when the next number should clear the display (after processing a command)
 bool          memory_mode   = false;      // The memory key has been pressed once and another press is needed
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -113,6 +125,16 @@ Calc_Command input_to_command(char c) {
 
 ////////////////////////////////////////////////////////////////////////////////
 //
+//  Identify a deferred command; one which is put in the command global rather
+//  being executed immediately
+//
+bool is_deferred_command(Calc_Command cmd) {
+  return (ADD == cmd || SUBTRACT == cmd || MULTIPLY == cmd || DIVIDE == cmd);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
 //  Display Routines
 //
 //  The display has four distinct parts:
@@ -129,11 +151,11 @@ Calc_Command input_to_command(char c) {
 //  Show the main number of interest near the top of the screen.
 //
 void display_accumulator() {
-  M5.Lcd.fillRect(0, ACC_TOP, SCREEN_WIDTH, ACC_HEIGHT, BG_COLOR);
-  M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);  // Blank space erases background w/ background color set
-  M5.Lcd.setTextDatum(TR_DATUM);            // Print right-justified, relative to end of string
+  M5.Lcd.fillRect(0, ACC_TOP, SCREEN_WIDTH, ACC_HEIGHT, ACC_BG_COLOR);
+  M5.Lcd.setTextColor(ACC_FG_COLOR, ACC_BG_COLOR);  // Blank space erases background w/ background color set
+  M5.Lcd.setTextDatum(TR_DATUM);                    // Print right-justified, relative to end of string
   M5.Lcd.drawString(accumulator, SCREEN_WIDTH - ACC_MARGIN, ACC_TOP, ACC_FONT);
-  M5.Lcd.setTextDatum(TL_DATUM);            // Go back to normal text alignment
+  M5.Lcd.setTextDatum(TL_DATUM);                    // Go back to normal text alignment
 }
 
 
@@ -142,7 +164,7 @@ void display_accumulator() {
 //  Clear the area used to display additional info
 //
 void clear_info() {
-  M5.Lcd.fillRect(0, INFO_TOP, SCREEN_WIDTH, INFO_HEIGHT, BG_COLOR);
+  M5.Lcd.fillRect(0, INFO_TOP, SCREEN_WIDTH, INFO_HEIGHT, INFO_BG_COLOR);
 }
 
 
@@ -152,7 +174,7 @@ void clear_info() {
 //
 void display_memory_info() {
   if(!memory_mode) return;
-  M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);  // Blank space erases background w/ background color set
+  M5.Lcd.setTextColor(INFO_FG_COLOR, INFO_BG_COLOR);  // Blank space erases background w/ background color set
   M5.Lcd.setCursor(INFO_MARGIN, INFO_TOP, INFO_FONT);
   M5.Lcd.drawCentreString("Memory Commands", SCREEN_H_CENTER, INFO_TOP, INFO_FONT);
   M5.Lcd.println();
@@ -178,36 +200,35 @@ void display_memory_info() {
 ////////////////////////////////////////////////////////////////////////////////
 //
 //  Show the calculator's status in the annunciator at the top-right of the screen.
-//  Display an 'M' if memory is set (or if the MEMORY command is active and memory is about to be set)
-//  Followed by any operation that may be pending.
+//  Display the Memory in the upper left corner.
+//  On the right, show an 'M' if in memory mode, followed by any operation that may be pending.
 //
 void display_annunciator() {
   String display = "                ";                        // With background text color set, this does erasing for us.
   bool memory_is_clear   = memory   == "0" || memory   == ""; // True if nothing stored in memory.
   bool opperand_is_clear = opperand == "0" || opperand == ""; // True if nothing stored in the operand.
-  if(memory_mode || !memory_is_clear) display += "M";         // Show M if entering a memory command, or if memory is set.
-  M5.Lcd.fillRect(0, ANN_TOP, SCREEN_WIDTH, ANN_HEIGHT, BG_COLOR);
+  M5.Lcd.fillRect(0, 0, SCREEN_WIDTH, ANN_TOP + ANN_HEIGHT, ANN_BG_COLOR);  // Erase from the top of the screen
+  if(memory_mode) display += "M";                             // Show M if entering a memory command.
+  if(!opperand_is_clear) display += " " + opperand;           // Display the number we're opperating one
   switch(command) {
-    case ADD:      display += " +"; break;    // Add any pending operation to the annunciator
+    case ADD:      display += " +"; break;                    // Add any pending operation to the annunciator
     case SUBTRACT: display += " -"; break;
     case MULTIPLY: display += " *"; break;
     case DIVIDE:   display += " /"; break;
     default:                        break;
   }
-  M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);      // Blank space erases background w/ background color set
-  M5.Lcd.setTextDatum(TR_DATUM);                // Print right-justified, relative to end of string
+  M5.Lcd.setTextColor(ANN_FG_COLOR, ANN_BG_COLOR);            // Blank space erases background w/ background color set
+  M5.Lcd.setTextDatum(TR_DATUM);                              // Print right-justified, relative to end of string
   M5.Lcd.drawString(display, SCREEN_WIDTH - ANN_MARGIN, ANN_TOP, ANN_FONT);
-  M5.Lcd.setTextDatum(TL_DATUM);                // Go back to normal text alignment
+  M5.Lcd.setTextDatum(TL_DATUM);                              // Go back to normal text alignment
   M5.Lcd.setCursor(ANN_MARGIN, ANN_TOP, ANN_FONT);
   if(!memory_is_clear) {
-    M5.Lcd.print(String("M = ") + memory + " ");
+    M5.Lcd.print(memory);                                     // Show memory in upper left corner
   }
-  if(!opperand_is_clear) {
-    M5.Lcd.print(String("O = ") + opperand);
-  }
-  clear_info();
-  if(memory_mode) display_memory_info();  // Display help on using memory
+  clear_info();                                               // Erase the area used to display extra info
+  if(memory_mode) display_memory_info();                      // Display help on using memory
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -412,6 +433,7 @@ void process_calculator_command(Calc_Command cmd) {
 }
 
 
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 //  Input Processing
@@ -424,7 +446,9 @@ void process_calculator_command(Calc_Command cmd) {
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-//  Handle a command from user input.
+//  Handle a command from user input. Decide which processor gets  the command.
+//  If it's non-memory-mode, determine if we need to execute a pending command
+//  first (for example: 1 + 1 + 1.)
 //
 void process_command(Calc_Command cmd) {
   // If the M key has been pressed, then this command should be handled specially.
@@ -433,6 +457,14 @@ void process_command(Calc_Command cmd) {
     memory_mode = false;
   }
   else {
+    // If the user presses +, then *, allow the processor to change + to *.
+    // Otherwise, we need to see if there's a pending command to execute.
+    if(!is_deferred_command(previous)) {
+      if(is_deferred_command(command)) {
+        perform_operation();
+      }
+    }
+    // Now continue with the current operation
     process_calculator_command(cmd);
     previous = cmd;
   }
@@ -497,6 +529,7 @@ bool process_input() {
 }
 
 
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 //  Arduino Runtime: setup() and loop()
@@ -515,6 +548,7 @@ void setup() {
   pinMode(KEYBOARD_INT, INPUT_PULLUP);
   M5.Lcd.fillScreen(BG_COLOR);
   display_accumulator();
+  display_annunciator();
 }
 
 
