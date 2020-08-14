@@ -17,15 +17,18 @@
 #define ANN_BG_COLOR          DARKGREY      // Annunciator background color
 
 #define ACC_TOP               36            // Top of the Accumulator display, where the sum is shown
-#define ACC_HEIGHT            54            // Height of the Accumulator
+#define ACC_HEIGHT            92            // Height of the Accumulator
 #define ACC_V_MARGIN          4             // Offset from top to top text
 #define ACC_H_MARGIN          16            // Left/right marging of the Accumulator
-#define ACC_FONT              6             // Accumulator font
+#define ACC_FONT_1            8             // Preferred Accumulator font
+#define ACC_FONT_2            6             // Smaller Accumulator font
+#define ACC_FONT_3            4             // Even smaller Accumulator font
+#define ACC_FONT_4            2             // Smallest Accumulator font
 #define ACC_FG_COLOR          FG_COLOR      // Accumulator foreground color
 #define ACC_BG_COLOR          BG_COLOR      // Accumulator background color
 
-#define INFO_TOP              108           // Top of the Info area
-#define INFO_HEIGHT           80            // Height of the Info area
+#define INFO_TOP              128           // Top of the Info area
+#define INFO_HEIGHT           92            // Height of the Info area
 #define INFO_H_MARGIN         16            // Left/right margins of the Info area
 #define INFO_V_MARGIN         2             // Offset from top to top text
 #define INFO_FONT             2             // Info font
@@ -228,12 +231,28 @@ void display_annunciator() {
 ////////////////////////////////////////////////////////////////////////////////
 //
 //  Show the main number of interest near the top of the screen.
+//  If it's too wide to fit, use a smaller font.
 //
 void display_accumulator() {
+  uint8_t   font  = ACC_FONT_1;
+  uint16_t  wid   = SCREEN_WIDTH - (2 * ACC_H_MARGIN);
+  // Select the font that fits the display
+  M5.Lcd.setTextFont(font);
+  if(wid < M5.Lcd.textWidth(accumulator)) {
+    font = ACC_FONT_2;
+    M5.Lcd.setTextFont(font);
+    if(wid < M5.Lcd.textWidth(accumulator)) {
+      font = ACC_FONT_3;
+      M5.Lcd.setTextFont(font);
+      if(wid < M5.Lcd.textWidth(accumulator)) {
+        font = ACC_FONT_4;
+      }
+    }
+  }
   M5.Lcd.fillRect(0, ACC_TOP, SCREEN_WIDTH, ACC_HEIGHT, ACC_BG_COLOR);
   M5.Lcd.setTextColor(ACC_FG_COLOR, ACC_BG_COLOR);  // Blank space erases background w/ background color set
   M5.Lcd.setTextDatum(TR_DATUM);                    // Print right-justified, relative to end of string
-  M5.Lcd.drawString(accumulator, SCREEN_WIDTH - ACC_H_MARGIN, ACC_TOP + ACC_V_MARGIN, ACC_FONT);
+  M5.Lcd.drawString(accumulator, SCREEN_WIDTH - ACC_H_MARGIN, ACC_TOP + ACC_V_MARGIN, font);
   M5.Lcd.setTextDatum(TL_DATUM);                    // Go back to normal text alignment
 }
 
