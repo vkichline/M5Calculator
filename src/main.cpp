@@ -7,20 +7,23 @@
 #define FG_COLOR              LIGHTGREY   // Arbitrary foreground color
 #define SCREEN_WIDTH          320         // Horizontal screen size
 #define SCREEN_H_CENTER       160         // Horizontal center of screen
+
 #define ANN_TOP               4           // Top of the Annunciator, which shows calculator status
 #define ANN_HEIGHT            16          // Height of the Annunciator
 #define ANN_MARGIN            16          // Left/right margin for the Annunciator
 #define ANN_FONT              2           // Annunciator font
+
 #define ACC_TOP               40          // Top of the Accumulator display, where the sum is shown
 #define ACC_HEIGHT            40          // Height of the Accumulator
 #define ACC_MARGIN            16          // Left/right marging of the Accumulator
 #define ACC_FONT              6           // Accumulator font
+
 #define INFO_TOP              110         // Top of the Info area
 #define INFO_HEIGHT           110         // Height of the Info area
 #define INFO_MARGIN           16          // Left/right margins of the Info area
 #define INFO_FONT             2           // Info font
 
-// Commands to be executed by the calculator
+// Calculator Commands
 //
 enum Calc_Command {
   NO_COMMAND,   // Nothing pending
@@ -37,22 +40,39 @@ enum Calc_Command {
 };
 
 
-const char    dp            = '.';        // Changes in differnet cultures
+// Global Variables
+//
+const char    dp            = '.';        // Decimal Point: changes in differnet cultures
+const char    ts            = ',';        // Thousands separator: changes in differnet cultures
 String        accumulator   = "0";        // The number displayed as the main value of the calculator
 String        opperand      = "0";        // The number the current command will operate on
 String        memory        = "0";        // The invisible memory
 Calc_Command  command       = NO_COMMAND; // Nothing to do currently
+Calc_Command  previous      = NO_COMMAND; // The previously executed command
 bool          restart       = true;       // This is true when the next number should clear the display (after processing a command)
 bool          memory_mode   = false;      // The memory key has been pressed once and another press is needed
 
 
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Utility Functions
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Keystroke identifying functions
+//
 bool is_digit(char c)   { return c >= '0' && c <= '9'; }    // Return true if the character is a digit 0 - 9
 bool is_command(char c) { return 0 != c && !is_digit(c); }  // Return true if the character is one of the commands
 
 
-// Create a string that will be the calculator display and storage value for the number given.
-// If there is no fractional part, don't include a decimal.
-// If there is, trim trailing zeros (and possibly decimal point as well.)
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Create a string that will be the calculator display and storage value for the given number.
+//  If there is no fractional part, don't include a decimal.
+//  If there is a fractional part, trim trailing zeros (and possibly decimal point as well.)
 //
 String double_to_string(double value) {
   char  buffer[64];
@@ -69,7 +89,44 @@ String double_to_string(double value) {
 }
 
 
-// Show the main number of interest near the top of the screen.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Convert an input character to a Calc_Command.
+//  Return NO_COMMAND if the character did not represent a known command.
+//
+Calc_Command input_to_command(char c) {
+  switch(c) {
+    case 'A': return CLEAR;
+    case 'M': return MEMORY;
+    case '%': return PERCENT;
+    case '/': return DIVIDE;
+    case '*': return MULTIPLY;
+    case '-': return SUBTRACT;
+    case '+': return ADD;
+    case '`': return SIGN;  // Unexpected character: 0x60
+    case '=': return TOTAL;
+    case '.': return DECIMAL;
+    default:  return NO_COMMAND;
+  }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Display Routines
+//
+//  The display has four distinct parts:
+//  The annunciator at the top shows calculator status
+//  The Accumulator shows the current total
+//  The Info area may pop up instructions
+//  Button Labels title the A/B/C buttons
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Show the main number of interest near the top of the screen.
 //
 void display_accumulator() {
   M5.Lcd.fillRect(0, ACC_TOP, SCREEN_WIDTH, ACC_HEIGHT, BG_COLOR);
@@ -80,13 +137,18 @@ void display_accumulator() {
 }
 
 
-// Clear the area used to display additional info
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Clear the area used to display additional info
 //
 void clear_info() {
   M5.Lcd.fillRect(0, INFO_TOP, SCREEN_WIDTH, INFO_HEIGHT, BG_COLOR);
 }
 
-// Show info about using the memory command when in memory_mode
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Show info about using the memory command when in memory_mode
 //
 void display_memory_info() {
   if(!memory_mode) return;
@@ -113,9 +175,11 @@ void display_memory_info() {
 }
 
 
-// Show the calculator's status in the annunciator at the top-right of the screen.
-// Display an 'M' if memory is set (or if the MEMORY command is active and memory is about to be set)
-// Followed by any operation that may be pending.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Show the calculator's status in the annunciator at the top-right of the screen.
+//  Display an 'M' if memory is set (or if the MEMORY command is active and memory is about to be set)
+//  Followed by any operation that may be pending.
 //
 void display_annunciator() {
   String display = "                ";                        // With background text color set, this does erasing for us.
@@ -146,27 +210,22 @@ void display_annunciator() {
 }
 
 
-// Convert an input character to a Calc_Command.
-// Return NO_COMMAND if the character did not represent a known command.
+////////////////////////////////////////////////////////////////////////////////
 //
-Calc_Command input_to_command(char c) {
-  switch(c) {
-    case 'A': return CLEAR;
-    case 'M': return MEMORY;
-    case '%': return PERCENT;
-    case '/': return DIVIDE;
-    case '*': return MULTIPLY;
-    case '-': return SUBTRACT;
-    case '+': return ADD;
-    case '`': return SIGN;  // Unexpected character: 0x60
-    case '=': return TOTAL;
-    case '.': return DECIMAL;
-    default:  return NO_COMMAND;
-  }
-}
+//  Command Processing Routines
+//
+//  Comands respond in two different modes: Normal and Memory
+//  Memory commands are two-key commands, so once M is pressed, the next command is a Memory Command.
+//  At all other times, commands are executed in normal mode.
+//  Some are immediate (CLEAR, SIGN, TOTAL) while others are deferred (ADD, SUBTRACT)
+//
+////////////////////////////////////////////////////////////////////////////////
 
 
-// Do the actual work of calculation.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Do the actual work of calculation by performing a deferred command.
+//  the opperation to perform is in command.
 //
 void perform_operation() {
   double acc = atof(accumulator.c_str());
@@ -208,10 +267,12 @@ void perform_operation() {
 }
 
 
-// Percentage is a little more complicated than other operations.
-// If there is no previous command, divide accumulator by 100.
-// If previous command was * or /, divide accumulator by 100 and perform_operation.
-// If previous command was + or -, replace accumulator with current accumulator % of opperand and perform_operation.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Percentage is a little more complicated than other operations.
+//  If there is no previous command, divide accumulator by 100.
+//  If previous command was * or /, divide accumulator by 100 and perform_operation.
+//  If previous command was + or -, replace accumulator with current accumulator % of opperand and perform_operation.
 //
 void perform_percentage() {
   double acc = atof(accumulator.c_str());
@@ -232,77 +293,83 @@ void perform_percentage() {
 }
 
 
-// If the M key has been pressed, the next command operates on memory, a little unconventionally:
-// MA (AC) clears memory. The accumulator and opperand are unchanged.
-// M+ adds the accumulator to memory. The accumulator and opperand are unchanged.
-// M- subtracts the accumulator from memory. The accumulator and opperand are unchanged.
-// M* multiplies memory by the accumulator. The accumulator and opperand are unchanged.
-// M/ divides memory by the accumulator. The accumulator and opperand are unchanged.
-// M= sets memory to the value of the accumulator. The accumulator and opperand are unchanged.
-// MM sets the accumulator to the value of memory. The opperand is unchanged.
-// Return true if a memory command was processed, else return false.
+////////////////////////////////////////////////////////////////////////////////
 //
-bool process_memory_command(Calc_Command cmd) {
-  if(memory_mode) {
-    double acc = atof(accumulator.c_str());
-    double mem = atof(memory.c_str());
-    switch(cmd) {
-      case CLEAR:
-        memory  = "0";
-        display_accumulator();  // Update display immediately
-        restart = true;         // New numbers replace accumulator rather than add to it.
-        break;
-      case ADD:
-        memory  = double_to_string(mem + acc);
-        restart = true;
-        break;
-      case SUBTRACT:
-        memory  = double_to_string(mem - acc);
-        restart = true;
-        break;
-      case MULTIPLY:
-        memory  = double_to_string(mem * acc);
-        restart = true;
-        break;
-      case DIVIDE:
-        memory  = double_to_string(mem / acc);
-        restart = true;
-        break;
-      case TOTAL:
-        memory  = accumulator;
-        restart = true;
-        break;
-      case MEMORY:
-        accumulator = memory;   // Memory recall
-        restart     = true;
-        display_accumulator();  // Update display immediately
-        break;
-      default :
-        break;
-    }
-    memory_mode = false;
-    return true;
+//  If the M key has been pressed, the next command operates on memory, a little unconventionally:
+//  MA (AC) clears memory. The accumulator and opperand are unchanged.
+//  M+ adds the accumulator to memory. The accumulator and opperand are unchanged.
+//  M- subtracts the accumulator from memory. The accumulator and opperand are unchanged.
+//  M* multiplies memory by the accumulator. The accumulator and opperand are unchanged.
+//  M/ divides memory by the accumulator. The accumulator and opperand are unchanged.
+//  M= sets memory to the value of the accumulator. The accumulator and opperand are unchanged.
+//  MM sets the accumulator to the value of memory. The opperand is unchanged.
+//  Return true if a memory command was processed, else return false.
+//
+void process_memory_command(Calc_Command cmd) {
+  double acc = atof(accumulator.c_str());
+  double mem = atof(memory.c_str());
+  switch(cmd) {
+    case CLEAR:
+      memory  = "0";
+      display_accumulator();  // Update display immediately
+      restart = true;         // New numbers replace accumulator rather than add to it.
+      break;
+    case ADD:
+      memory  = double_to_string(mem + acc);
+      restart = true;
+      break;
+    case SUBTRACT:
+      memory  = double_to_string(mem - acc);
+      restart = true;
+      break;
+    case MULTIPLY:
+      memory  = double_to_string(mem * acc);
+      restart = true;
+      break;
+    case DIVIDE:
+      memory  = double_to_string(mem / acc);
+      restart = true;
+      break;
+    case TOTAL:
+      memory  = accumulator;
+      restart = true;
+      break;
+    case MEMORY:
+      accumulator = memory;   // Memory recall
+      restart     = true;
+      display_accumulator();  // Update display immediately
+      break;
+    default :
+      break;
   }
-  return false;
 }
 
 
-// Handle a command from user input.
+////////////////////////////////////////////////////////////////////////////////
 //
-void process_command(Calc_Command cmd) {
-  // If we're processing a memory command, then this command should be handled specially.
-  if(process_memory_command(cmd)) return;
-
-  // Normal (non-memory) command handling
+//  Handle a calculator command.
+//
+void process_calculator_command(Calc_Command cmd) {
   switch(cmd) {
     case CLEAR:
       accumulator = "0";        // Special case for the empty number.
       display_accumulator();    // Unary operator; display immediately.
+      if(CLEAR == previous) {   // If this is a double-AC
+        memory    = "0";        // Clear everything
+        opperand  = "0";
+        command   = NO_COMMAND;
+      }
       return;
     case DECIMAL:
       // Make sure there's not already a decimal point in the accumulator.
       if(-1 == accumulator.indexOf(dp)) {
-        accumulator += dp;
+        if(restart) {
+          accumulator = "0.";   // Special case for when we've just entered a number
+          restart     = false;  // terminate restart mode
+        }
+        else {
+          accumulator += dp;    // Normal case: decimal point always goes at the end.
+        }
         display_accumulator();  // Unary operator; display immediately.
       }
       break;
@@ -345,20 +412,52 @@ void process_command(Calc_Command cmd) {
 }
 
 
-// A digit key has been typed in NORMAL_INPUT or POST_DECIMAL_INPUT mode.
-// Push it into the accumulator and display it.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Input Processing
+//
+//  Read keys from Calculator Keyboard, process digits to build accumulator string.
+//  Identify and dispatch commands to command processors.
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Handle a command from user input.
+//
+void process_command(Calc_Command cmd) {
+  // If the M key has been pressed, then this command should be handled specially.
+  if(memory_mode) {
+    process_memory_command(cmd);
+    memory_mode = false;
+  }
+  else {
+    process_calculator_command(cmd);
+    previous = cmd;
+  }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  A digit key has been typed in NORMAL_INPUT or POST_DECIMAL_INPUT mode.
+//  Push it into the accumulator and display it.
 //
 void process_digit(uint8_t digit) {
   assert(digit < 10);                         // Make sure we're just getting 0 - 9.
+  previous = NO_COMMAND;                      // Last thing done was not a command.
   if(accumulator == "0") accumulator = "";    // Special case for the 'empty' number
-  if(restart)        accumulator = "";    // A command was entered; start getting second value
+  if(restart)            accumulator = "";    // A command was entered; start getting second value
   accumulator += String(digit);               // Always simply append digit to the end
-  restart = false;                        // Make sure we don't keep clearing the accumulator
+  restart = false;                            // Make sure we don't keep clearing the accumulator
   display_accumulator();                      // Show the new value
 }
 
 
-// Returns true and changes ref to char if key is available, otherwise returns false.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Return true and change ref to input char if key is available, otherwise returns false.
 //
 bool read_key(char& input) {
   if(digitalRead(KEYBOARD_INT) == LOW) {      // If a character is ready
@@ -375,9 +474,11 @@ bool read_key(char& input) {
 }
 
 
-// Read a key from the keyboard.
-// If it's a digit, push it into the accumulator and display it.
-// If it's a command, execute it.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Read a key from the keyboard.
+//  If it's a digit, push it into the accumulator and display it.
+//  If it's a command, execute it.
 //
 bool process_input() {
   char input;
@@ -396,7 +497,16 @@ bool process_input() {
 }
 
 
-// Standard Arduino program initialization function.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Arduino Runtime: setup() and loop()
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Standard Arduino program initialization function.
 //
 void setup() {
   M5.begin();
@@ -408,8 +518,11 @@ void setup() {
 }
 
 
-// Standard Arduino program loop
-// Continually look for input and process it.
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Standard Arduino program loop
+//  Continually look for input and process it.
+//
 void loop() {
   // If anything happend, make sure the annunciator is updated
   if(process_input()) display_annunciator();
