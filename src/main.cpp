@@ -43,6 +43,7 @@ String        opperand      = "0";        // The number the current command will
 String        memory        = "0";        // The invisible memory
 Calc_Command  command       = NO_COMMAND; // Nothing to do currently
 bool          restart       = true;       // This is true when the next number should clear the display (after processing a command)
+bool          memory_mode   = false;      // The memory key has been pressed once and another press is needed
 
 
 bool is_digit(char c)   { return c >= '0' && c <= '9'; }    // Return true if the character is a digit 0 - 9
@@ -243,7 +244,7 @@ void perform_percentage() {
 //
 void process_command(Calc_Command cmd) {
   // If the current command is MEMROY, then this command should be handled specially.
-  if(MEMORY == command) {
+  if(memory_mode) {
     double acc = atof(accumulator.c_str());
     double mem = atof(memory.c_str());
 
@@ -281,7 +282,7 @@ void process_command(Calc_Command cmd) {
       default :
         break;
     }
-    command = NO_COMMAND;
+    memory_mode = false;
     return;
   }
 
@@ -319,7 +320,7 @@ void process_command(Calc_Command cmd) {
       restart   = true;
       break;
     case MEMORY:
-      command   = MEMORY;       // Enter memory mode, which will effect future commands.
+      memory_mode = true;       // Enter memory mode, which will effect future commands.
       break;
     case SIGN:
       command   = SIGN;
