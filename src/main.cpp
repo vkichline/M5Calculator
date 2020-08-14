@@ -86,10 +86,10 @@ void clear_info() {
   M5.Lcd.fillRect(0, INFO_TOP, SCREEN_WIDTH, INFO_HEIGHT, BG_COLOR);
 }
 
-// Show info about using the memory command when the active command is MEMORY
+// Show info about using the memory command when in memory_mode
 //
 void display_memory_info() {
-  if(MEMORY != command) return;
+  if(!memory_mode) return;
   M5.Lcd.setTextColor(FG_COLOR, BG_COLOR);  // Blank space erases background w/ background color set
   M5.Lcd.setCursor(INFO_MARGIN, INFO_TOP, INFO_FONT);
   M5.Lcd.drawCentreString("Memory Commands", SCREEN_H_CENTER, INFO_TOP, INFO_FONT);
@@ -119,9 +119,9 @@ void display_memory_info() {
 //
 void display_annunciator() {
   String display = "                ";                        // With background text color set, this does erasing for us.
-  bool memory_is_clear   = memory   == "0" || memory   == ""; // True if nothing stored in memory
-  bool opperand_is_clear = opperand == "0" || opperand == ""; // True if nothing stored in the operand
-  if(MEMORY == command || !memory_is_clear) display += "M";
+  bool memory_is_clear   = memory   == "0" || memory   == ""; // True if nothing stored in memory.
+  bool opperand_is_clear = opperand == "0" || opperand == ""; // True if nothing stored in the operand.
+  if(memory_mode || !memory_is_clear) display += "M";         // Show M if entering a memory command, or if memory is set.
   M5.Lcd.fillRect(0, ANN_TOP, SCREEN_WIDTH, ANN_HEIGHT, BG_COLOR);
   switch(command) {
     case ADD:      display += " +"; break;    // Add any pending operation to the annunciator
@@ -142,7 +142,7 @@ void display_annunciator() {
     M5.Lcd.print(String("O = ") + opperand);
   }
   clear_info();
-  if(MEMORY == command) display_memory_info();  // Display help on using memory
+  if(memory_mode) display_memory_info();  // Display help on using memory
 }
 
 
@@ -232,7 +232,6 @@ void perform_percentage() {
 }
 
 
-// Handle a command from user input.
 // If the M key has been pressed, the next command operates on memory, a little unconventionally:
 // MA (AC) clears memory. The accumulator and opperand are unchanged.
 // M+ adds the accumulator to memory. The accumulator and opperand are unchanged.
@@ -241,13 +240,12 @@ void perform_percentage() {
 // M/ divides memory by the accumulator. The accumulator and opperand are unchanged.
 // M= sets memory to the value of the accumulator. The accumulator and opperand are unchanged.
 // MM sets the accumulator to the value of memory. The opperand is unchanged.
+// Return true if a memory command was processed, else return false.
 //
-void process_command(Calc_Command cmd) {
-  // If the current command is MEMROY, then this command should be handled specially.
+bool process_memory_command(Calc_Command cmd) {
   if(memory_mode) {
     double acc = atof(accumulator.c_str());
     double mem = atof(memory.c_str());
-
     switch(cmd) {
       case CLEAR:
         memory  = "0";
@@ -283,8 +281,17 @@ void process_command(Calc_Command cmd) {
         break;
     }
     memory_mode = false;
-    return;
+    return true;
   }
+  return false;
+}
+
+
+// Handle a command from user input.
+//
+void process_command(Calc_Command cmd) {
+  // If we're processing a memory command, then this command should be handled specially.
+  if(process_memory_command(cmd)) return;
 
   // Normal (non-memory) command handling
   switch(cmd) {
