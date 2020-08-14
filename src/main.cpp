@@ -22,7 +22,7 @@
 #define ACC_BG_COLOR          BG_COLOR    // Accumulator background color
 
 #define INFO_TOP              110         // Top of the Info area
-#define INFO_HEIGHT           110         // Height of the Info area
+#define INFO_HEIGHT           80          // Height of the Info area
 #define INFO_MARGIN           16          // Left/right margins of the Info area
 #define INFO_FONT             2           // Info font
 #define INFO_FG_COLOR         FG_COLOR    // Info foreground color
@@ -177,23 +177,8 @@ void display_memory_info() {
   M5.Lcd.setTextColor(INFO_FG_COLOR, INFO_BG_COLOR);  // Blank space erases background w/ background color set
   M5.Lcd.setCursor(INFO_MARGIN, INFO_TOP, INFO_FONT);
   M5.Lcd.drawCentreString("Memory Commands", SCREEN_H_CENTER, INFO_TOP, INFO_FONT);
-  M5.Lcd.println();
-  M5.Lcd.println();
-  M5.Lcd.setCursor(INFO_MARGIN, M5.Lcd.getCursorY());
-  M5.Lcd.print("MM  M -> A  Recall");
-  M5.Lcd.setCursor(SCREEN_H_CENTER, M5.Lcd.getCursorY());
-  M5.Lcd.println("M=  A -> M  Save");
-  M5.Lcd.setCursor(INFO_MARGIN, M5.Lcd.getCursorY());
-  M5.Lcd.println("MA  0 -> M  Clear");
-  M5.Lcd.println();
-  M5.Lcd.setCursor(INFO_MARGIN, M5.Lcd.getCursorY());
-  M5.Lcd.print("M+  M + A -> M");
-  M5.Lcd.setCursor(SCREEN_H_CENTER, M5.Lcd.getCursorY());
-  M5.Lcd.println("M-  M - A -> M");
-  M5.Lcd.setCursor(INFO_MARGIN, M5.Lcd.getCursorY());
-  M5.Lcd.print("M*  M * A -> M");
-  M5.Lcd.setCursor(SCREEN_H_CENTER, M5.Lcd.getCursorY());
-  M5.Lcd.println("M/  M / A -> M");
+  M5.Lcd.drawCentreString("M M  Recall      M =  Save      M AC  Clear", SCREEN_H_CENTER, INFO_TOP + 30, INFO_FONT);
+  M5.Lcd.drawCentreString("Also  M+  M-  M*  M/ to change Memory", SCREEN_H_CENTER, INFO_TOP + 55, INFO_FONT);
 }
 
 
