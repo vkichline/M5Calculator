@@ -20,10 +20,9 @@
 #define ACC_HEIGHT            92            // Height of the Accumulator
 #define ACC_V_MARGIN          4             // Offset from top to top text
 #define ACC_H_MARGIN          16            // Left/right marging of the Accumulator
-#define ACC_FONT_1            8             // Preferred Accumulator font
-#define ACC_FONT_2            6             // Smaller Accumulator font
-#define ACC_FONT_3            4             // Even smaller Accumulator font
-#define ACC_FONT_4            2             // Smallest Accumulator font
+#define ACC_FONT_1            6             // Preferred Accumulator font
+#define ACC_FONT_2            4             // Smaller Accumulator font
+#define ACC_FONT_3            2             // Smallest Accumulator font
 #define ACC_FG_COLOR          FG_COLOR      // Accumulator foreground color
 #define ACC_BG_COLOR          BG_COLOR      // Accumulator background color
 
@@ -113,8 +112,22 @@ String double_to_string(double value) {
     while('0' == buffer[strlen(buffer) - 1]) {
       buffer[strlen(buffer) - 1] = '\0';
     }
+    if('.' ==buffer[strlen(buffer) - 1]) {
+      buffer[strlen(buffer) - 1] = '\0';
+    }
   }
   return String(buffer);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Convert a display string back into a double.
+//
+double string_to_double(String str) {
+  str.replace(String(ts), "");    // Remove all thousands separators
+  str.replace(dp, '.');           // For atof() to work correctly
+  return str.toDouble();
 }
 
 
@@ -190,7 +203,7 @@ void display_memory_info() {
   M5.Lcd.setTextColor(INFO_FG_COLOR, INFO_BG_COLOR);  // Blank space erases background w/ background color set
   M5.Lcd.drawCentreString("Memory Commands", SCREEN_H_CENTER, INFO_TOP + INFO_V_MARGIN, INFO_FONT);
   M5.Lcd.drawCentreString("M M  Recall      M =  Save      M AC  Clear", SCREEN_H_CENTER, INFO_TOP + INFO_V_MARGIN + 30, INFO_FONT);
-  M5.Lcd.drawCentreString("Also  M+  M-  M*  M/ to change Memory", SCREEN_H_CENTER, INFO_TOP + INFO_V_MARGIN + 55, INFO_FONT);
+  M5.Lcd.drawCentreString("Also  M+  M-  M*  M/  M%  to change Memory", SCREEN_H_CENTER, INFO_TOP + INFO_V_MARGIN + 55, INFO_FONT);
 }
 
 
@@ -243,10 +256,6 @@ void display_accumulator() {
     M5.Lcd.setTextFont(font);
     if(wid < M5.Lcd.textWidth(accumulator)) {
       font = ACC_FONT_3;
-      M5.Lcd.setTextFont(font);
-      if(wid < M5.Lcd.textWidth(accumulator)) {
-        font = ACC_FONT_4;
-      }
     }
   }
   M5.Lcd.fillRect(0, ACC_TOP, SCREEN_WIDTH, ACC_HEIGHT, ACC_BG_COLOR);
@@ -288,8 +297,8 @@ void display_button_labels() {
 //  the opperation to perform is in command.
 //
 void perform_operation() {
-  double acc = atof(accumulator.c_str());
-  double opp = atof(opperand.c_str());
+  double acc = string_to_double(accumulator);
+  double opp = string_to_double(opperand);
 
   switch(command) {
     case ADD:
@@ -336,14 +345,14 @@ void perform_operation() {
 //  If previous command was + or -, replace accumulator with current accumulator % of opperand and perform_operation.
 //
 void perform_percentage() {
-  double acc = atof(accumulator.c_str());
+  double acc = string_to_double(accumulator);
 
   if(NO_COMMAND == command) {
     accumulator = double_to_string(acc / 100.0);
     display_accumulator();
   }
   else if(ADD == command || SUBTRACT == command) {
-    double opp = atof(opperand.c_str());
+    double opp = string_to_double(opperand);
     accumulator = double_to_string(acc / 100.0 * opp);
     perform_operation();
   }
@@ -363,12 +372,13 @@ void perform_percentage() {
 //  M* multiplies memory by the accumulator. The accumulator and opperand are unchanged.
 //  M/ divides memory by the accumulator. The accumulator and opperand are unchanged.
 //  M= sets memory to the value of the accumulator. The accumulator and opperand are unchanged.
+//  M% sets memory to memory / accumulator / 100.
 //  MM sets the accumulator to the value of memory. The opperand is unchanged.
 //  Return true if a memory command was processed, else return false.
 //
 void process_memory_command(Calc_Command cmd) {
-  double acc = atof(accumulator.c_str());
-  double mem = atof(memory.c_str());
+  double acc = string_to_double(accumulator);
+  double mem = string_to_double(memory);
   switch(cmd) {
     case CLEAR:
       memory  = "0";
@@ -389,6 +399,10 @@ void process_memory_command(Calc_Command cmd) {
       break;
     case DIVIDE:
       memory  = double_to_string(mem / acc);
+      restart = true;
+      break;
+    case PERCENT:
+      memory  = double_to_string(mem / acc / 100.0);
       restart = true;
       break;
     case TOTAL:
@@ -491,8 +505,8 @@ void process_calculator_command(Calc_Command cmd) {
 //
 void process_button(uint8_t button) {
   if(BUTTON_A == button && can_backspace()) {
-    accumulator.remove(accumulator.length() - 1);               // Remove the last character
-    accumulator = double_to_string(atof(accumulator.c_str()));  // Fixes up all kinds of problems
+    accumulator.remove(accumulator.length() - 1);                   // Remove the last character
+    accumulator = double_to_string(string_to_double(accumulator));  // Fixes up misc problems
     display_accumulator();
   }
 }
