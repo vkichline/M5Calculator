@@ -1,4 +1,4 @@
-# M5Stack Calculator with Calcualtor Face Module
+# M5Stack Calculator with Calculator Face Module
 
 I recently obtained a [Calculator Face Module](https://docs.m5stack.com/#/en/module/faces_calculator) for the M5Stack.
 While there is a [sample program](https://github.com/m5stack/M5-ProductExampleCodes/blob/master/Module/CALCULATOR/CALCULATOR.ino) for Arduino
@@ -17,7 +17,7 @@ The coding has been kep deliberately simple and straight-forward to make it easy
 
 ## Instructions
 
-* Enter any number by pressing `0` - ` 9` keys. Enter a decimal point with `.` key.
+* Enter any number by pressing `0` - `9` keys. Enter a decimal point with `.` key.
 * While inputting numbers, `Button A` can be used to backspace.
 * Change input number's sign by pressing `+/-`.
 * Clear the input by pressing `AC`. Press `AC` again to clear memory and pending operation.
